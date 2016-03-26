@@ -166,7 +166,7 @@ function show($comic, $actions = [])
 {
 ?>
 
-<?=$comic->name?>
+<a href="<?=$comic->site?>"><?=$comic->name?></a>
 
 <span style='float: left;'><?php
 
@@ -211,13 +211,16 @@ function show($comic, $actions = [])
 ?>
 <title>Comics</title>
 <style>
-    section { width: 50%; margin: auto; }
+    section { width: 50%; margin: auto; border: thin solid; }
     section > :not(h1) { width: 70%; margin: auto; }
     form { display: block; text-align: right; }
     h1 { text-align: center; }
+    .add { position: fixed; width: 25%; }
+    .edit { position: fixed; right: 0; width: 25%; }
+    .add > *, .edit > * { width: 90%; }
 </style>
 
-<section>
+<section class=add>
 <h1>Add</h1>
 <form method=POST>
     <label>Name</label>
@@ -238,7 +241,7 @@ if (isset($G_NAME))
         header('Location: ?');
     }
 ?>
-<section>
+<section class=edit>
 <h1>Change</h1>
 <form style='text-align: center;'>
     <a href='<?=$row->site?>'><?=$row->name?></a>
