@@ -6,7 +6,6 @@ namespace comics;
 require_once 'comics.php';
 require_once 'simplepie_1.3.1.mini.php';
 
-# TODO: limit to ten rolling things
 $q = "SELECT CASE WHEN `feed` IS NULL THEN `site` ELSE `feed` END FROM Comics";
 if (isset($_GET['new']))
     $q .= " WHERE latest IS NULL";
@@ -14,6 +13,8 @@ else if (isset($_GET['resolve']))
     $q .= " WHERE resolve IS NOT NULL";
 else if (isset($_GET['unread']))
     $q .= " WHERE latest != current";
+# limit to ten rolling things
+$q .= " ORDER BY stamp ASC LIMIT 10";
 $q = \db\run($q)->fetchAll(\PDO::FETCH_COLUMN, 0);
 
 $pie = new \SimplePie();
@@ -58,6 +59,21 @@ $q = \db\prepare($q);
 
 $pie->init();
 
+function url_clean($url)
+{
+    # remove some parts of the url query
+    $q_old = parse_url($url, PHP_URL_QUERY);
+    $q_parts = [];
+    parse_str($q_old, $q_parts);
+    unset(
+        $q_parts['utm_source'],
+        $q_parts['utm_medium'],
+        $q_parts['utm_campaign']
+        );
+    $q_new = http_build_query($q_parts);
+    return str_replace($q_old, $q_new, $url);
+}
+
 foreach ($pie->get_items() as $item)
 {
     $feed_url = $item->get_feed()->get_base();
@@ -72,17 +88,7 @@ foreach ($pie->get_items() as $item)
     # resolve those that need to be
     if (!is_null($row->resolve))
         $url = resolve($url);
-    # remove any junk
-    $q_old = parse_url($url, PHP_URL_QUERY);
-    $q_parts = [];
-    parse_str($q_old, $q_parts);
-    unset(
-        $q_parts['utm_source'],
-        $q_parts['utm_medium'],
-        $q_parts['utm_campaign']
-        );
-    $q_new = http_build_query($q_parts);
-    $url = str_replace($q_old, $q_new, $url);
+    $url = url_clean($url);
     # TODO: add url title?
     $comic = set_latest($row->name, $url);
 
