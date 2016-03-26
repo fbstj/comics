@@ -28,18 +28,6 @@ if ($_GET['limit'])
 
 $pie->set_feed_url($q);
 
-function resolve($url)
-{
-	$headers = get_headers($url);
-	$headers = array_reverse($headers);
-	foreach ($headers as $header) {
-		if (strpos($header, 'Location: ') === 0) {
-			$url = str_replace('Location: ', '', $header);
-			break;
-		}
-	}
-    return $url;
-}
 $q = "SELECT name, stamp, latest, resolve FROM Comics WHERE site = ? ";
 $q .= "OR ? LIKE '%' || name || '%' OR name LIKE ?";
 $q = \db\prepare($q);
@@ -59,21 +47,6 @@ $q = \db\prepare($q);
 
 $pie->init();
 
-function url_clean($url)
-{
-    # remove some parts of the url query
-    $q_old = parse_url($url, PHP_URL_QUERY);
-    $q_parts = [];
-    parse_str($q_old, $q_parts);
-    unset(
-        $q_parts['utm_source'],
-        $q_parts['utm_medium'],
-        $q_parts['utm_campaign']
-        );
-    $q_new = http_build_query($q_parts);
-    return str_replace($q_old, $q_new, $url);
-}
-
 foreach ($pie->get_items() as $item)
 {
     $feed_url = $item->get_feed()->get_base();
@@ -87,18 +60,20 @@ foreach ($pie->get_items() as $item)
         continue;
     # resolve those that need to be
     if (!is_null($row->resolve))
-        $url = resolve($url);
-    $url = url_clean($url);
-    # TODO: add url title?
+        $url = \urls\resolve($url);
+    $url = \urls\clean($url);
+    # add url with time passed
+    $up_date = $item->get_gmdate("Y-m-d H:i:s");
+    $url = \urls\add($url, $item->get_title(), $up_date);
     $comic = set_latest($row->name, $url);
 
 ?>
 <tr>
     <td><?=$comic->name?></td>
     <td><?=$url?></td>
-    <td><?=$item->get_gmdate("Y-m-d H:i:s")?></td>
+    <td><?=$up_date?></td>
     <td><?=$feed_url?></td>
-    <td><?=$feed_title?></td>
+    <td><?=$feed_title?><br><?=$item->get_title()?></td>
 </tr>
 <?php
 
