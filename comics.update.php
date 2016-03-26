@@ -7,30 +7,29 @@ require_once 'comics.php';
 require_once 'simplepie_1.3.1.mini.php';
 
 $q = "SELECT CASE WHEN `feed` IS NULL THEN `site` ELSE `feed` END FROM Comics";
-if (isset($_GET['new']))
+if (isset($_GET['name']))
+    $q .= ' WHERE name LIKE "%'.$_GET['name'].'%"';
+else if (isset($_GET['new']))
     $q .= " WHERE latest IS NULL";
 else if (isset($_GET['resolve']))
     $q .= " WHERE resolve IS NOT NULL";
 else if (isset($_GET['unread']))
     $q .= " WHERE latest != current";
-# limit to ten rolling things
-$q .= " ORDER BY stamp ASC LIMIT 10";
+else if (isset($_GET['finished']))
+    $q .= " WHERE latest = current";
+#$q .= " ORDER BY stamp ASC LIMIT 10";
 $q = \db\run($q)->fetchAll(\PDO::FETCH_COLUMN, 0);
+
+# limit to ten rolling things
+$qs = array_chunk($q, 10);
 
 $pie = new \SimplePie();
 
-$pie->enable_cache(false);
+#$pie->enable_cache(false);
 
 $pie->set_item_limit(1);
 if ($_GET['limit'])
     $pie->set_item_limit($_GET['limit']);
-    
-
-$pie->set_feed_url($q);
-
-$q = "SELECT name, stamp, latest, resolve FROM Comics WHERE site = ? ";
-$q .= "OR ? LIKE '%' || name || '%' OR name LIKE ?";
-$q = \db\prepare($q);
 
 ?>
 <title>Update Comics</title>
@@ -45,16 +44,35 @@ $q = \db\prepare($q);
 </tr>
 <?php
 
+flush();
+
+$q1 = filter('feed = ? OR site = ?');
+
+$q2 = filter(
+    "(site LIKE ?) OR (? LIKE '%' || site || '%')".
+    " OR (? LIKE '%' || name || '%') OR (name LIKE ?)"
+    );
+
+foreach ($qs as $qp)
+{
+$pie->set_feed_url($qp);
+
 $pie->init();
 
 foreach ($pie->get_items() as $item)
 {
-    $feed_url = $item->get_feed()->get_base();
+    $feed_url = $item->get_feed()->feed_url;
     $feed_title = $item->get_feed()->get_title();
-    $feed_match = $feed_title ==  '' or ctype_space($feed_title);
-    $feed_match = $feed_match ? "" : "%{$feed_title}%";
-    $q->execute([ $feed_url, $feed_title, $feed_match ]);
-    $row = $q->fetch();
+    $q1->execute([ $feed_url, $feed_url ]);
+    $row = $q1->fetchAll();
+    if (count($row) == 0)
+    {
+        $feed_match = $feed_title ==  '' or ctype_space($feed_title);
+        $feed_match = $feed_match ? "" : "%{$feed_title}%";
+        $q2->execute([ $feed_url, $feed_title, $feed_match ]);
+        $row = $q2->fetch();
+    }
+    else $row = $row[0];
     $url = $item->get_permalink();
     if ($url == '')
         continue;
@@ -77,4 +95,6 @@ foreach ($pie->get_items() as $item)
 </tr>
 <?php
 
-}
+}   # for item in pie
+    flush();
+}   # for feeds in

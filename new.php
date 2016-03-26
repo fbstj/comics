@@ -6,9 +6,6 @@ include_once "comics.php";
 if (__FILE__ != get_included_files()[0])
     return;
 
-$q = Q::$all->queryString ." WHERE latest IS NULL";
-$q = \db\prepare($q);
-
 ?>
 <title>New Comics</title>
 <style>
@@ -21,20 +18,17 @@ $q = \db\prepare($q);
     .add > *, .edit > * { width: 90%; }
 </style>
 
-<nav>
-    <a href=comics.php>All</a>
-    <a href=comics.update.php?new>Update</a>
-</nav>
+<?php show_nav('new'); ?>
 
 <section>
 <h1>New</h1>
-<div>
 <?php
-$q->execute();
-foreach ($q->fetchAll() as $row)
-{
-    ?><div style='text-align: center;'><?=show($row)?></div><?php
-}
+
+$q = filter('latest IS NULL', 'name ASC');
+
+$acts = [ ];
+
+show_list($q, $acts);
+
 ?>
-</ul>
 </section>

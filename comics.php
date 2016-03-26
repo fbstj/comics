@@ -7,6 +7,8 @@ include_once "url.php";
 $tbl = 'Comics';
 
 class Q {
+    static $table = null;
+
     static $get = null;
     static $add = null;
 
@@ -14,16 +16,12 @@ class Q {
     static $set_current = null;
     static $set_latest = null;
     static $set_feed = null;
+    static $set_status = null;
 
-    static $get_unread = null;
-    static $get_unstarted = null;
-    static $get_current = null;
-    static $get_finished = null;
-
-    static $all = null;
-    
     static function init($tbl)
     {
+        self::$table = $tbl;
+
         $q = "SELECT * FROM $tbl WHERE name = ?";
         self::$get = \db\prepare($q);
         
@@ -44,28 +42,15 @@ class Q {
 
         $q = "UPDATE $tbl SET feed = ?, $set_stamp WHERE name = ?";
         self::$set_feed = \db\prepare($q);
-        
-        
-        $get_order = "ORDER BY stamp DESC";
-        
-        $q = "SELECT * FROM $tbl WHERE `current` != `latest` AND `read` IS NOT NULL $get_order";
-        self::$get_unread = \db\prepare($q);
 
-        $q = "SELECT * FROM $tbl WHERE `read` IS NULL ORDER BY name ASC";
-        self::$get_unstarted = \db\prepare($q);
-
-        $q = "SELECT * FROM $tbl WHERE `current` = `latest` AND `read` IS NOT NULL ORDER BY name ASC";
-        self::$get_current = \db\prepare($q);
-
-        $q = "SELECT * FROM $tbl";
-        self::$all = \db\prepare($q);
+        $q = "UPDATE $tbl SET status = ?, $set_stamp WHERE name = ?";
+        self::$set_status = \db\prepare($q);
     }
 }
 Q::init('Comics');
 
-
 function get($name)
-{
+{   # retrieve by name
     Q::$get->execute([ $name ]);
     return Q::$get->fetch();
 }
@@ -108,21 +93,25 @@ function mark_as_read($row)
     Q::$set_current->execute([ $row->latest, $row->name ]);
 }
 
+function set_status($row, $status)
+{
+    Q::$set_status->execute([ $status, $row->name ]);
+}
+
 function set_feed($name, $href)
 {
-    Q::$set_feed->execute([ $href, $name]);
+    Q::$set_feed->execute([ $href, $name ]);
     return get($name);
 }
 
-# name stamp first (url) current (url+date:read) latest (url)
-# first & latest get their date (aka 'added and 'updated) from their urls
-
-
-if (__FILE__ != get_included_files()[0])
-    return;
+function filter($where = [], $order = null, $limit = null)
+{   # generate SELECT query
+    $q = \db\gen_select(Q::$table, '*', $where, $order, $limit);
+    return \db\prepare($q);
+}
 
 function edit_url($id, $field)
-{
+{   # show a URL edit box the passed field
     if (is_numeric($id))
         $url = \urls\get($id);
 ?>
@@ -134,35 +123,35 @@ function edit_url($id, $field)
 <?php
 }
 
-if (isset($_GET['name']))
-{
-    $G_NAME = urldecode($_GET['name']);
+function show_nav($up = '')
+{   # show navigation box at top of pages
+?>
+<nav>
+    <a href=comics.php>Unread</a>
+    <a href=new.php>New</a>
+    <a href=unstarted.php>Unstarted</a>
+    <a href=hidden.php>Hidden</a>
+    <a href=finished.php>Finished</a>
+    <a href=comics.update.php?<?=$up?>>Update</a>
+</nav>
+<?php
 }
 
-if (isset($_POST['name']))
+function show_list($q, $acts, $q_args = null)
 {
-    $row = add($_POST['name'], $_POST['href']);
-}
-
-if (isset($_POST['first']))
-{
-    $row = set_first($G_NAME, $_POST['first']);
-}
-
-if (isset($_POST['current']))
-{
-    $row = set_current($G_NAME, $_POST['current']);
-}
-
-if (isset($_POST['latest']))
-{
-    $row = set_latest($G_NAME, $_POST['latest']);
-}
-
-if (isset($_POST['feed']))
-{
-    if ($_POST['feed'] != '') $feed = $_POST['feed'];
-    $row = set_feed($G_NAME, $feed);
+    $q->execute($q_args);
+?>
+<ul>
+<?php
+    foreach ($q->fetchAll() as $row)
+    {
+        ?><div style='text-align: center;'>
+        <?=show($row, $acts)?>
+        </div><?php
+    }
+?>
+</ul>
+<?php
 }
 
 function show($comic, $actions = [])
@@ -193,7 +182,7 @@ function show($comic, $actions = [])
     
     foreach ($actions as $text => $act)
     {
-        \urls\show('?name='. urlencode($comic->name) .'&'. $act, "[{$text}]");
+        \urls\show('comics.php?name='. urlencode($comic->name) .'&'. $act, "[{$text}]");
         print ' ';
     }
 ?>
@@ -203,7 +192,7 @@ function show($comic, $actions = [])
 <?php
 
     \urls\show(
-        '?name='.urlencode($comic->name),
+        'comics.php?name='.urlencode($comic->name),
         '[edit]'
         );
 ?>
@@ -211,8 +200,59 @@ function show($comic, $actions = [])
 <?php
 } # END show($comic, $actions)
 
+# END OF functions
+if (__FILE__ != get_included_files()[0])
+    return;
+
+if (isset($_GET['name']))
+{
+    $G_NAME = urldecode($_GET['name']);
+}
+
+# -- SAVE actions
+if (isset($_POST['name']))
+{
+    $row = add($_POST['name'], $_POST['href']);
+}
+
+if (isset($_POST['first']))
+{
+    $row = set_first($G_NAME, $_POST['first']);
+}
+
+if (isset($_POST['current']))
+{
+    $row = set_current($G_NAME, $_POST['current']);
+}
+
+if (isset($_POST['latest']))
+{
+    $row = set_latest($G_NAME, $_POST['latest']);
+}
+
+if (isset($_POST['feed']))
+{
+    if ($_POST['feed'] != '') $feed = $_POST['feed'];
+    $row = set_feed($G_NAME, $feed);
+}
+# -- END SAVE actions
+
+if (isset($G_NAME))
+{   # mark as read
+    $row = get($G_NAME);
+    if (isset($_GET['mark_read']))
+    {
+        mark_as_read($row);
+        header('Location: ?');
+    }
+    if (isset($_GET['mark_hide']))
+    {
+        set_status($row, 'hid');
+        header('Location: ?');
+    }
+}
 ?>
-<title>Comics</title>
+<title>Unread Comics</title>
 <style>
     section { width: 50%; margin: auto; border: thin solid; }
     section > :not(h1) { width: 70%; margin: auto; }
@@ -222,6 +262,8 @@ function show($comic, $actions = [])
     .edit { position: fixed; right: 0; width: 25%; }
     .add > *, .edit > * { width: 90%; }
 </style>
+
+<?php show_nav(); ?>
 
 <section class=add>
 <h1>Add</h1>
@@ -236,13 +278,7 @@ function show($comic, $actions = [])
 
 <?php
 if (isset($G_NAME))
-{
-    $row = get($G_NAME);
-    if (isset($_GET['mark_read']))
-    {
-        mark_as_read($row);
-        header('Location: ?');
-    }
+{   # show EDIT box
 ?>
 <section class=edit>
 <h1>Change</h1>
@@ -260,51 +296,28 @@ if (isset($G_NAME))
 <?=edit_url($row->latest, 'latest')?>
 </section>
 <?php
-}
+}   # isset($row)
 ?>
 
 <section>
 <h1>Unread</h1>
 <div>
 <?php
-Q::$get_unread->execute();
+$q = filter([
+    '`current` != `latest`',
+    '`read` IS NOT NULL',
+    "(status is null or status == 'unread')",
+    ], 'name ASC');
+$q->execute();
 $unread_acts = [
     'read' => 'mark_read',
+    'hide' => 'mark_hide',
     ];
-foreach (Q::$get_unread->fetchAll() as $row)
-{
-    ?><div style='text-align: center;'><?=show($row, $unread_acts)?></div><?php
-}
-?>
-</ul>
-</section>
-
-<section>
-<h1>Unstarted</h1>
-<ul>
-<?php
-Q::$get_unstarted->execute();
-$unstarted_acts = [
-    'read' => 'mark_read',
-    ];
-foreach (Q::$get_unstarted->fetchAll() as $row)
+foreach ($q->fetchAll() as $row)
 {
     ?><div style='text-align: center;'>
-        <?=show($row, $unstarted_acts)?>
+    <?=show($row, $unread_acts)?>
     </div><?php
-}
-?>
-</ul>
-</section>
-
-<section>
-<h1>Caught up</h1>
-<ul>
-<?php
-Q::$get_current->execute();
-foreach (Q::$get_current->fetchAll() as $row)
-{
-    ?><div style='text-align: center;'><?=show($row)?></div><?php
 }
 ?>
 </ul>
