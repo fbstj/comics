@@ -8,6 +8,7 @@ class Q {
     static $get = null;
     static $add = null;
     static $find = null;
+    static $update = null;
 
     static function init($tbl)
     {
@@ -17,6 +18,9 @@ class Q {
         $add = "INSERT INTO $tbl (href, title, stamp)".
                 "VALUES (?, ?, CURRENT_TIMESTAMP)";
         self::$add = \db\prepare($add);
+
+        $update = "UPDATE $tbl SET stamp = ?, title = ? WHERE id = ?";
+        self::$update = \db\prepare($update);
 
         $find = "SELECT id FROM $tbl WHERE href LIKE ?";
         self::$find = \db\prepare($find);
@@ -30,11 +34,14 @@ function get($id)
     return Q::$get->fetch();
 }
 
-function add($href, $title = null)
+function add($href, $title = null, $date = null)
 {
     Q::$add->execute([ $href, $title ]);
     Q::$find->execute([ $href ]);
-    return Q::$find->fetchColumn(0);
+    $id = Q::$find->fetchColumn(0);
+    if (!is_null($date))
+        Q::$update->execute([ $date, $title, $id ]);
+    return $id;
 }
 
 $find = "SELECT href, title, stamp FROM $tbl WHERE href LIKE ?";
@@ -55,6 +62,34 @@ function show($url, $title = null)
         $tite = $href;
     
     ?><a href="<?=$href?>"><?=$title?></a><?php
+}
+
+function resolve($url)
+{   # resolve any redirects in $url
+	$headers = get_headers($url);
+	$headers = array_reverse($headers);
+	foreach ($headers as $header) {
+		if (strpos($header, 'Location: ') === 0) {
+			$url = str_replace('Location: ', '', $header);
+			break;
+		}
+	}
+    return $url;
+}
+
+function clean($url)
+{   # clean up a url
+    # remove some parts of the url query
+    $q_old = parse_url($url, PHP_URL_QUERY);
+    $q_parts = [];
+    parse_str($q_old, $q_parts);
+    unset(
+        $q_parts['utm_source'],
+        $q_parts['utm_medium'],
+        $q_parts['utm_campaign']
+        );
+    $q_new = http_build_query($q_parts);
+    return str_replace($q_old, $q_new, $url);
 }
 
 if (__FILE__ != get_included_files()[0])
