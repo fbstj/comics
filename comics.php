@@ -78,10 +78,10 @@ function add($name, $site)
 
 function set_url($query, $name, $href)
 {   # set one of the url parameters
-    if (is_string($href))
-        $url = \urls\add($href);
-    else if (is_numeric($href))
+    if (is_numeric($href))
         $url = $href;
+    else if (is_string($href))
+        $url = \urls\add($href);
     else
         throw new Exception('');
     $query->execute([ $url, $name ]);
