@@ -39,10 +39,7 @@ class Q {
         $q = "UPDATE $tbl SET current = ?, read = CURRENT_TIMESTAMP, $set_stamp WHERE name = ?";
         self::$set_current = \db\prepare($q);
 
-        $q = "UPDATE $tbl
-    SET latest = ?, $set_stamp
-    WHERE name = ?
-        AND (latest IS NULL OR latest != ?)";
+        $q = "UPDATE $tbl SET latest = ?, $set_stamp WHERE name = ?";
         self::$set_latest = \db\prepare($q);
 
         $q = "UPDATE $tbl SET feed = ?, $set_stamp WHERE name = ?";
@@ -79,25 +76,31 @@ function add($name, $site)
     return get($name);
 }
 
+function set_url($query, $name, $href)
+{   # set one of the url parameters
+    if (is_string($href))
+        $url = \urls\add($href);
+    else if (is_numeric($href))
+        $url = $href;
+    else
+        throw new Exception('');
+    $query->execute([ $url, $name ]);
+    return get($name);
+}
+
 function set_first($name, $href)
 {   # set first
-    $url = \urls\add($href);
-    Q::$set_first->execute([ $url, $name ]);
-    return get($name);
+    return set_url(Q::$set_first, $name, $href);
 }
 
 function set_current($name, $href)
 {   # set current
-    $url = \urls\add($href);
-    Q::$set_current->execute([ $url, $name ]);
-    return get($name);
+    return set_url(Q::$set_current, $name, $href);
 }
 
 function set_latest($name, $href)
 {   # set latest
-    $url = \urls\add($href);
-    Q::$set_latest->execute([ $url, $name, $url ]);
-    return get($name);
+    return set_url(Q::$set_latest, $name, $href);
 }
 
 function mark_as_read($row)
