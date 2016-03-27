@@ -6,7 +6,7 @@ class Table
 {
     function __construct($name, $fields = [])
     {
-        $this->name = $name;
+        $this->NAME = $name;
         $this->fields = $fields;
         foreach ($fields as $f)
         {
@@ -18,7 +18,7 @@ class Table
     
     function subset($fields)
     {
-        return new Table($this->name, $fields);
+        return new Table($this->NAME, $fields);
     }
     
     function filter($where = [], $order = null, $limit = null)
@@ -34,7 +34,7 @@ class Table
         if (is_array($fields))
             $fields = join(', ', $fields);
         $where = gen_where($where, $order, $limit);
-        $q = "SELECT $fields FROM {$this->name} $where";
+        $q = "SELECT $fields FROM {$this->NAME} $where";
         return prepare($q);
     }
     
@@ -56,7 +56,7 @@ class Table
         }
         $fields = join(', ', $fields);
         $values = join(', ', $values);
-        $q = "INSERT INTO {$this->name} ($fields) VALUES ($values)";
+        $q = "INSERT INTO {$this->NAME} ($fields) VALUES ($values)";
         return prepare($q);
     }
     
@@ -76,7 +76,7 @@ class Table
         }
         $values = join(', ', $values);
         $where = gen_where($where, $order, $limit);
-        $q = "UPDATE {$this->name} SET $values $where";
+        $q = "UPDATE {$this->NAME} SET $values $where";
         return prepare($q);
     }
 }
