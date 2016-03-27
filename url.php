@@ -97,6 +97,13 @@ function clean($url)
     return str_replace($q_old, $q_new, $url);
 }
 
+function compare($a, $b, $part = \PHP_URL_HOST)
+{
+    $a_part = parse_url($a, $part);
+    $b_part = parse_url($b, $part);
+    return strcmp($a_part, $b_part) === 0;
+}
+
 if (__FILE__ != get_included_files()[0])
     return;
 
