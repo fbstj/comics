@@ -4,29 +4,31 @@ namespace urls;
 
 include_once ".db.php";
 
+const TABLE = 'Urls';
+
 class Q {
     static $get = null;
     static $add = null;
     static $find = null;
     static $update = null;
-
-    static function init($tbl)
-    {
-        $get = "SELECT href, title, stamp FROM $tbl WHERE id = ?";
-        self::$get = \db\prepare($get);
-
-        $add = "INSERT INTO $tbl (href, title, stamp)".
-                "VALUES (?, ?, CURRENT_TIMESTAMP)";
-        self::$add = \db\prepare($add);
-
-        $update = "UPDATE $tbl SET stamp = ?, title = ? WHERE id = ?";
-        self::$update = \db\prepare($update);
-
-        $find = "SELECT id FROM $tbl WHERE href LIKE ?";
-        self::$find = \db\prepare($find);
-    }
 }
-Q::init('Urls');
+$q = \db\gen_select(TABLE, [ 'href', 'title', 'stamp' ], 'id = ?');
+Q::$get = \db\prepare($q);
+
+$q = \db\gen_insert(TABLE,
+    [ 'href', 'title',             'stamp' ],
+    [    '?',     '?', 'CURRENT_TIMESTAMP' ]
+    );
+Q::$add = \db\prepare($q);
+
+$q = \db\gen_update(TABLE,
+    [ 'stamp = ? ', 'title = ?' ],
+    'id = ?'
+    );
+Q::$update = \db\prepare($q);
+
+$q = \db\gen_select(TABLE, 'id', 'href LIKE ?');
+Q::$find = \db\prepare($q);
 
 function get($id)
 {

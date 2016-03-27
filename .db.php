@@ -25,37 +25,36 @@ function prepare($sql)
     return $DB->prepare($sql);
 }
 
-function gen_select($table, $fields, $where = [], $order = null, $limit = null)
-{   # generate a SELECT query
-    if (is_array($fields))
-        $fields = join(', ', $fields);
+function gen_where($where = [], $order = null, $limit = null)
+{
     if (is_array($where))
         $where = join(' AND ', $where);
     if (!is_null($order))
         $where .= ' ORDER BY '. $order;
     if (is_numeric($limit))
         $where .= ' LIMIT '. $limit;
+    return $where;
+}
+
+function gen_select($table, $fields, $where = [], $order = null, $limit = null)
+{   # generate a SELECT query
+    if (is_array($fields))
+        $fields = join(', ', $fields);
+    $where = gen_where($where, $order, $limit);
     return 'SELECT '. $fields .' FROM '. $table .' WHERE '. $where;
 }
 
-function inserter($table, $fields, $values)
+function gen_insert($table, $fields, $values)
 {
-    global $DB;
-    $sql = "INSERT INTO $table ($fields) VALUES ($values)";
-    $q = $DB->prepare($sql);
-    return function ($params) use ($q, $DB) {
-        $q->execute($params);
-        return $DB->lastInsertId();
-    };
+   if (is_array($fields))
+        $fields = join(', ', $fields);
+    if (is_array($values))
+        $values = join(', ', $values);
+     return "INSERT INTO $table ($fields) VALUES ($values)";
 }
 
-function updater($table, $values, $where)
+function gen_update($table, $values, $where, $limit = 1)
 {
-    global $DB;
-    $sql = "UPDATE $table SET $values WHERE $where LIMIT 1";
-    $q = $DB->prepare($sql);
-    return function ($params) use ($q) {
-        $q->execute($params);
-        return $q;
-    };
+    $where = gen_where($where, $order, $limit);
+    return "UPDATE $table SET $values WHERE $where";
 }
