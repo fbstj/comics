@@ -6,48 +6,48 @@ include_once ".db.php";
 
 const TABLE = 'Urls';
 
-class Q {
-    static $get = null;
-    static $add = null;
-    static $find = null;
-    static $update = null;
+class Table extends \db\Table
+{
+    function __construct()
+    {
+        parent::__construct(TABLE, [
+            new \db\Field('id'),
+            new \db\Field('href'),
+            new \db\Field('title', null, null, true),
+            new \db\Field('stamp', null, 'CURRENT_TIMESTAMP'),
+            ]);
+        $q = [ $this->href, $this->title, $this->stamp ];
+        $where = [ $this->id->equal() ];
+        $this->get = $this->subset($q)->filter($where);
+        $this->add = $this->subset($q)->inserter($where);
+        $q = [ $this->stamp, $this->title ];
+        $this->set = $this->subset($q)->updater($where);
+        $this->find = $this->subset([ $this->id ])
+                            ->filter([ $this->href->like() ]);
+    }
 }
-$q = \db\gen_select(TABLE, [ 'href', 'title', 'stamp' ], 'id = ?');
-Q::$get = \db\prepare($q);
 
-$q = \db\gen_insert(TABLE,
-    [ 'href', 'title',             'stamp' ],
-    [    '?',     '?', 'CURRENT_TIMESTAMP' ]
-    );
-Q::$add = \db\prepare($q);
+class Q {
+    static $t = null;
+}
 
-$q = \db\gen_update(TABLE,
-    [ 'stamp = ? ', 'title = ?' ],
-    'id = ?'
-    );
-Q::$update = \db\prepare($q);
-
-$q = \db\gen_select(TABLE, 'id', 'href LIKE ?');
-Q::$find = \db\prepare($q);
+Q::$t = new Table();
 
 function get($id)
 {
-    Q::$get->execute([ $id ]);
-    return Q::$get->fetch();
+    Q::$t->get->execute([ $id ]);
+    return Q::$t->get->fetch();
 }
 
 function add($href, $title = null, $date = null)
 {
-    Q::$add->execute([ $href, $title ]);
-    Q::$find->execute([ $href ]);
-    $id = Q::$find->fetchColumn(0);
+    Q::$t->add->execute([ $href, $title ]);
+    Q::$t->find->execute([ $href ]);
+    $id = Q::$t->find->fetchColumn(0);
     if (!is_null($date))
-        Q::$update->execute([ $date, $title, $id ]);
+        Q::$t->set->execute([ $date, $title, $id ]);
     return $id;
 }
-
-$find = "SELECT href, title, stamp FROM $tbl WHERE href LIKE ?";
-$find = \db\prepare($find);
 
 function show($url, $title = null)
 {
@@ -133,9 +133,9 @@ if (isset($_POST['href']))
 <h1>List</h1>
 <ul>
 <?php
-Q::$find->execute([ '%'.$_GET['href'].'%' ]);
+Q::$t->find->execute([ '%'.$_GET['href'].'%' ]);
 
-foreach (Q::$find->fetchAll() as $url)
+foreach (Q::$t->find->fetchAll() as $url)
 {
 ?>
     <li><?=show(get($url->id))?></li>
