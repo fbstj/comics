@@ -51,6 +51,9 @@ $find = \db\prepare($find);
 
 function show($url, $title = null)
 {
+    if (is_numeric($url))
+        $url = get($url);
+
     if (is_string($url))
         $href = $url;
     else
