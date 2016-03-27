@@ -4,60 +4,58 @@ namespace comics;
 include_once ".db.php";
 include_once "url.php";
 
-$tbl = 'Comics';
+const TABLE = 'Comics';
 
-class Q {
-    static $table = null;
+#define('DEBUG_QUERY',1);
 
-    static $get = null;
-    static $add = null;
-
-    static $set_first = null;
-    static $set_current = null;
-    static $set_latest = null;
-    static $set_feed = null;
-    static $set_status = null;
-
-    static function init($tbl)
+class Table extends \db\Table
+{
+    function __construct()
     {
-        self::$table = $tbl;
+        parent::__construct(TABLE,  [
+                new \db\Field('name'),
+                new \db\Field('site'),
+                new \db\Field('feed', null, null, true),
+                new \db\Field('stamp', null, 'CURRENT_TIMESTAMP'),
+                new \db\Field('first', null, null, true),
+                new \db\Field('current', null, null, true),
+                new \db\Field('read', null, null, true),
+                new \db\Field('latest', null, null, true),
+                new \db\Field('resolve', null, null, true),
+            ]);
 
-        $q = "SELECT * FROM $tbl WHERE name = ?";
-        self::$get = \db\prepare($q);
-        
-        $q = "INSERT INTO $tbl (name, site, stamp) ".
-                "VALUES (?, ?, CURRENT_TIMESTAMP)";
-        self::$add = \db\prepare($q);
+        $where = [ $this->name->equal() ];
+        $this->get = $this->filter($where);
 
-        $set_stamp = 'stamp = CURRENT_TIMESTAMP';
+        $add_f= [ $this->name, $this->site, $this->stamp ];
+        $this->add = $this->subset($add_f)->inserter();
 
-        $q = "UPDATE $tbl SET first = ?, $set_stamp WHERE name = ?";
-        self::$set_first = \db\prepare($q);
-
-        $q = "UPDATE $tbl SET current = ?, read = CURRENT_TIMESTAMP, $set_stamp WHERE name = ?";
-        self::$set_current = \db\prepare($q);
-
-        $q = "UPDATE $tbl SET latest = ?, $set_stamp WHERE name = ?";
-        self::$set_latest = \db\prepare($q);
-
-        $q = "UPDATE $tbl SET feed = ?, $set_stamp WHERE name = ?";
-        self::$set_feed = \db\prepare($q);
-
-        $q = "UPDATE $tbl SET status = ?, $set_stamp WHERE name = ?";
-        self::$set_status = \db\prepare($q);
+        $this->set_first = $this->subset([ $this->first, $this->stamp ])
+                                ->updater($where);
+        $set_read = new \db\Field('read', null, 'CURRENT_TIMESTAMP');
+        $this->set_current = $this->subset([ $this->current, $set_read, $this->stamp ])
+                                ->updater($where);
+        $this->set_latest = $this->subset([ $this->latest, $this->stamp ])
+                                ->updater($where);
+        $this->set_feed = $this->subset([ $this->feed, $this->stamp ])
+                                ->updater($where);
     }
 }
-Q::init('Comics');
+
+class Q {
+    static $t = null;
+}
+Q::$t = new Table();
 
 function get($name)
 {   # retrieve by name
-    Q::$get->execute([ $name ]);
-    return Q::$get->fetch();
+    Q::$t->get->execute([ $name ]);
+    return Q::$t->get->fetch();
 }
 
 function add($name, $site)
 {   # add comic with name and site
-    Q::$add->execute([ $name, $site ]);
+    Q::$t->add->execute([ $name, $site ]);
     return get($name);
 }
 
@@ -75,39 +73,38 @@ function set_url($query, $name, $href)
 
 function set_first($name, $href)
 {   # set first
-    return set_url(Q::$set_first, $name, $href);
+    return set_url(Q::$t->set_first, $name, $href);
 }
 
 function set_current($name, $href)
 {   # set current
-    return set_url(Q::$set_current, $name, $href);
+    return set_url(Q::$t->set_current, $name, $href);
 }
 
 function set_latest($name, $href)
 {   # set latest
-    return set_url(Q::$set_latest, $name, $href);
+    return set_url(Q::$t->set_latest, $name, $href);
 }
 
 function mark_as_read($row)
 {
-    Q::$set_current->execute([ $row->latest, $row->name ]);
+    Q::$t->set_current->execute([ $row->latest, $row->name ]);
 }
 
 function set_status($row, $status)
 {
-    Q::$set_status->execute([ $status, $row->name ]);
+    Q::$t->set_status->execute([ $status, $row->name ]);
 }
 
 function set_feed($name, $href)
 {
-    Q::$set_feed->execute([ $href, $name ]);
+    Q::$t->set_feed->execute([ $href, $name ]);
     return get($name);
 }
 
 function filter($where = [], $order = null, $limit = null)
 {   # generate SELECT query
-    $q = \db\gen_select(Q::$table, '*', $where, $order, $limit);
-    return \db\prepare($q);
+    return Q::$t->filter($where, $order, $limit);
 }
 
 function edit_url($id, $field)
@@ -137,7 +134,7 @@ function show_nav($up = '')
 <?php
 }
 
-function show_list($q, $acts, $q_args = null)
+function show_list($q, $acts, $q_args = null, $cbs = [])
 {
     $q->execute($q_args);
 ?>
@@ -147,6 +144,14 @@ function show_list($q, $acts, $q_args = null)
     {
         ?><div style='text-align: center;'>
         <?=show($row, $acts)?>
+<?php
+    foreach($cbs as $cb)
+    {
+        if (!is_callable($cb))
+            continue;
+        print $cb($row);
+    }
+?>
         </div><?php
     }
 ?>
@@ -306,7 +311,7 @@ if (isset($G_NAME))
 $q = filter([
     '`current` != `latest`',
     '`read` IS NOT NULL',
-    "(status is null or status == 'unread')",
+#    "(status is null or status == 'unread')",
     ], 'name ASC');
 $q->execute();
 $unread_acts = [
